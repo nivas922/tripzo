@@ -1,6 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Bus, KeyRound, Mail, AlertCircle, ShieldCheck, User, Compass, ArrowRight } from 'lucide-react';
+import { getApiBaseUrl, setCustomBackendUrl, checkBackendHealth } from '../services/api';
+import { 
+  Bus, 
+  KeyRound, 
+  Mail, 
+  AlertCircle, 
+  ShieldCheck, 
+  User, 
+  Compass, 
+  ArrowRight,
+  Server,
+  Settings,
+  CheckCircle2,
+  RefreshCw
+} from 'lucide-react';
 
 export const Login = ({ onLoginSuccess }) => {
   const { login } = useAuth();
@@ -8,6 +22,40 @@ export const Login = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Backend connection status & configuration
+  const [backendUrl, setBackendUrl] = useState(getApiBaseUrl());
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [customInput, setCustomInput] = useState(getApiBaseUrl());
+  const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'online' | 'offline'
+
+  const pingServer = async (target) => {
+    setServerStatus('checking');
+    const res = await checkBackendHealth(target || backendUrl);
+    setServerStatus(res.ok ? 'online' : 'offline');
+  };
+
+  useEffect(() => {
+    pingServer();
+  }, [backendUrl]);
+
+  const handleSaveBackendUrl = (e) => {
+    e.preventDefault();
+    setCustomBackendUrl(customInput);
+    const resolved = getApiBaseUrl();
+    setBackendUrl(resolved);
+    setEditingUrl(false);
+    pingServer(resolved);
+  };
+
+  const handleResetToOrigin = () => {
+    setCustomBackendUrl(window.location.origin);
+    const resolved = getApiBaseUrl();
+    setCustomInput(resolved);
+    setBackendUrl(resolved);
+    setEditingUrl(false);
+    pingServer(resolved);
+  };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -26,10 +74,11 @@ export const Login = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error('Login error:', err);
+      const isNetError = !err.response || err.code === 'ERR_NETWORK';
       setError(
-        err.response?.data?.message || 
-        err.response?.data?.error || 
-        'Login failed. Please check your credentials or backend connection.'
+        isNetError
+          ? `Could not reach backend at ${backendUrl}. If using Render, ensure your backend service is running, or click "Change Backend URL" below to enter your Render URL.`
+          : (err.response?.data?.message || err.response?.data?.error || 'Login failed. Please check your credentials.')
       );
     } finally {
       setLoading(false);
@@ -43,7 +92,7 @@ export const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex flex-col justify-center py-10 sm:px-6 lg:px-8 px-4">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Brand Header */}
         <div className="flex justify-center">
@@ -162,9 +211,79 @@ export const Login = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        <p className="mt-4 text-center text-xs text-slate-400">
-          Connected to backend: <code className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-300">{import.meta.env.VITE_API_URL || 'http://localhost:5000'}</code>
-        </p>
+        {/* Backend Connection & Configuration Widget */}
+        <div className="mt-4 p-3.5 rounded-xl bg-slate-800/80 backdrop-blur border border-slate-700/80 text-xs text-slate-300 shadow-md">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Server className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <div className="truncate">
+                <span className="text-slate-400">Backend: </span>
+                <span className="font-mono text-blue-300 font-medium">{backendUrl}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {serverStatus === 'online' ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-700/50 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Online
+                </span>
+              ) : serverStatus === 'checking' ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Pinging...
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-400 bg-red-950/60 border border-red-700/50 px-2 py-0.5 rounded-full">
+                  Offline
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setEditingUrl(!editingUrl)}
+                className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-white transition"
+                title="Change Backend URL"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Editable Backend URL Drawer */}
+          {editingUrl && (
+            <form onSubmit={handleSaveBackendUrl} className="mt-3 pt-3 border-t border-slate-700 space-y-2">
+              <label className="block text-[11px] font-medium text-slate-300">
+                Enter your Render Backend URL (or leave blank to auto-detect):
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  placeholder="https://your-backend-app.onrender.com"
+                  className="flex-1 px-2.5 py-1.5 rounded bg-slate-900 border border-slate-600 text-white font-mono text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded transition"
+                >
+                  Save
+                </button>
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
+                <span>Example: <code>https://tripzo-backend.onrender.com</code></span>
+                <button
+                  type="button"
+                  onClick={handleResetToOrigin}
+                  className="text-blue-400 hover:underline"
+                >
+                  Use Current Domain
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

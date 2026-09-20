@@ -1,18 +1,57 @@
 import axios from 'axios';
 
-// Get backend URL from environment, or fallback to current origin, or localhost:5000
-const rawUrl = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
-export const API_BASE_URL = rawUrl.replace(/\/+$/, '');
+// Dynamically resolve API URL: localStorage override > env var > current origin (if on web) > localhost:5000
+export const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('tripzo_backend_url');
+    if (custom && custom.trim() !== '') return custom.trim().replace(/\/+$/, '');
+  }
+
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() !== '' && !envUrl.includes('localhost')) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location.origin) {
+    if (!window.location.hostname.includes('localhost')) {
+      return window.location.origin;
+    }
+  }
+
+  return (envUrl && envUrl.trim()) ? envUrl.trim().replace(/\/+$/, '') : 'http://localhost:5000';
+};
+
+export const setCustomBackendUrl = (url) => {
+  if (!url || url.trim() === '') {
+    localStorage.removeItem('tripzo_backend_url');
+  } else {
+    localStorage.setItem('tripzo_backend_url', url.trim().replace(/\/+$/, ''));
+  }
+};
+
+export const checkBackendHealth = async (testUrl) => {
+  const target = (testUrl || getApiBaseUrl()).replace(/\/+$/, '');
+  try {
+    const res = await axios.get(`${target}/api/health`, { timeout: 8000 });
+    return { ok: true, data: res.data };
+  } catch (err) {
+    return { 
+      ok: false, 
+      status: err.response?.status,
+      message: err.message || 'Server unreachable' 
+    };
+  }
+};
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Attach JWT token to all requests if logged in
+// Attach current baseURL and JWT token to all requests
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiBaseUrl();
   const token = localStorage.getItem('tripzo_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -25,7 +64,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear expired credentials
       localStorage.removeItem('tripzo_token');
       localStorage.removeItem('tripzo_user');
       if (window.location.pathname !== '/login') {

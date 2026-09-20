@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { API_BASE_URL } from './api';
+import { getApiBaseUrl } from './api';
 
 let socket = null;
 
@@ -9,7 +9,8 @@ export const initSocket = (token) => {
     socket.disconnect();
   }
 
-  socket = io(API_BASE_URL, {
+  const serverUrl = getApiBaseUrl();
+  socket = io(serverUrl, {
     auth: {
       token: token || localStorage.getItem('tripzo_token'),
     },
