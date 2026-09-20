@@ -18,6 +18,14 @@ async function connectDB() {
 
   let uri = (config.mongoUri || '').trim().replace(/^["']|["']$/g, '');
 
+  try {
+    const atIndex = uri.lastIndexOf('@');
+    if (atIndex !== -1) {
+      const hostPart = uri.substring(atIndex + 1).split('/')[0].split('?')[0];
+      console.log(`[Database] Connecting to cluster host: "${hostPart}"`);
+    }
+  } catch (e) {}
+
   if (uri.includes('<') || uri.includes('>')) {
     console.error('[Database] WARNING: Your MONGO_URI contains "<" or ">" brackets! Please replace <password> with your actual password without the brackets.');
   }
