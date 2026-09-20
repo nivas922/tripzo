@@ -99,6 +99,21 @@ function createApp({ authProvider, socketManager } = {}) {
   // Direct /api mount for root endpoints (/api/location/ping, /api/trips/start, etc.)
   app.use('/api', trackingRoutes);
 
+  // Serve Frontend Static Single-Page Application (TripZo Live UI)
+  const fs = require('fs');
+  const publicDir = path.join(__dirname, '../public');
+  app.use(express.static(publicDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/api-docs') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    const indexHtml = path.join(publicDir, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      return res.sendFile(indexHtml);
+    }
+    next();
+  });
+
   // Error handling
   app.use(notFoundHandler);
   app.use(errorHandler);

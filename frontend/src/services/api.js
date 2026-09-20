@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Get backend URL from environment or default to local port 5000
-const rawUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Get backend URL from environment, or fallback to current origin, or localhost:5000
+const rawUrl = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
 export const API_BASE_URL = rawUrl.replace(/\/+$/, '');
 
 const api = axios.create({
