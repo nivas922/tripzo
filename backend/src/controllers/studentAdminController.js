@@ -133,7 +133,9 @@ const studentAdminController = {
         return res.status(404).json({ success: false, message: 'Student user not found' });
       }
 
-      const { assignedBusId, assignedRouteId, homeStopId } = req.body;
+      const assignedBusId = req.body.assignedBusId || req.body.busId;
+      const assignedRouteId = req.body.assignedRouteId || req.body.routeId;
+      const homeStopId = req.body.homeStopId;
 
       let resolvedRouteId = assignedRouteId;
       let busDoc = null;
