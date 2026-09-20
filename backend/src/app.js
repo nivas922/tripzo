@@ -43,6 +43,17 @@ function createApp({ authProvider, socketManager } = {}) {
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/auth', authRoutes); // Backwards compatibility alias
 
+  // Phase 2: Fleet, Route & Student Management CRUD
+  const busRoutes = require('./routes/busRoutes');
+  const routeRoutes = require('./routes/routeRoutes');
+  const studentRoutes = require('./routes/studentRoutes');
+  const driverRoutes = require('./routes/driverRoutes');
+
+  app.use('/api/buses', busRoutes);
+  app.use('/api/routes', routeRoutes);
+  app.use('/api/students', studentRoutes);
+  app.use('/api/drivers', driverRoutes);
+
   // Self-Contained Tracking Module
   const trackingRoutes = createTrackingRoutes({
     authProvider: activeAuthProvider,
