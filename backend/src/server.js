@@ -1,3 +1,10 @@
+const dns = require('dns');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  // Ignore
+}
+
 const http = require('http');
 const config = require('./config');
 const { connectDB, disconnectDB } = require('./config/db');

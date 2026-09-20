@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
 const config = require('./index');
+
+// Force reliable public DNS servers (Google + Cloudflare) for MongoDB SRV lookups on cloud hosts
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  // Ignore in environments where setting DNS servers is restricted
+}
 
 let mongod = null;
 
@@ -8,7 +16,11 @@ async function connectDB() {
     return mongoose.connection;
   }
 
-  let uri = config.mongoUri;
+  let uri = (config.mongoUri || '').trim().replace(/^["']|["']$/g, '');
+
+  if (uri.includes('<') || uri.includes('>')) {
+    console.error('[Database] WARNING: Your MONGO_URI contains "<" or ">" brackets! Please replace <password> with your actual password without the brackets.');
+  }
 
   if (!uri) {
     try {
@@ -23,11 +35,13 @@ async function connectDB() {
   }
 
   try {
-    await mongoose.connect(uri);
-    console.log(`[Database] Connected to MongoDB at: ${uri.replace(/\/\/.*@/, '//***:***@')}`);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 10000,
+    });
+    console.log(`[Database] Connected to MongoDB successfully at: ${uri.replace(/\/\/.*@/, '//***:***@')}`);
     return mongoose.connection;
   } catch (err) {
-    console.error(`[Database] Error connecting to MongoDB at ${uri}:`, err.message);
+    console.error(`[Database] Error connecting to MongoDB:`, err.message);
     throw err;
   }
 }
