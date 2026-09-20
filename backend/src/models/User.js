@@ -5,30 +5,37 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, 'Name is required'],
       trim: true,
     },
     email: {
       type: String,
-      required: true,
+      required: [true, 'Email is required'],
       unique: true,
       lowercase: true,
       trim: true,
+      match: [/\S+@\S+\.\S+/, 'Please provide a valid email address'],
+    },
+    password: {
+      type: String,
+      required: [true, 'Password is required'],
+      minlength: [6, 'Password must be at least 6 characters'],
+    },
+    role: {
+      type: String,
+      enum: {
+        values: ['STUDENT', 'DRIVER', 'ADMIN'],
+        message: '{VALUE} is not a valid role. Allowed: STUDENT, DRIVER, ADMIN',
+      },
+      default: 'STUDENT',
+      required: true,
     },
     phone: {
       type: String,
       trim: true,
-      // Private: strictly withheld from student endpoints
     },
     passwordHash: {
       type: String,
-      required: true,
-    },
-    role: {
-      type: String,
-      enum: ['student', 'driver', 'admin'],
-      default: 'student',
-      required: true,
     },
     assignedBusId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -45,14 +52,38 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+userSchema.pre('validate', function (next) {
+  if (this.role && typeof this.role === 'string') {
+    this.role = this.role.toUpperCase();
+  }
+  if (!this.password && this.passwordHash) {
+    this.password = this.passwordHash;
+  }
+  next();
+});
+
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  if (typeof this.password === 'string' && /^\$2[aby]\$\d+\$/.test(this.password)) {
+    this.passwordHash = this.password;
+    return next();
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  this.passwordHash = this.password;
+  next();
+});
+
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.passwordHash);
+  const hash = this.password || this.passwordHash;
+  return bcrypt.compare(candidatePassword, hash);
 };
 
 userSchema.methods.toSafeJSON = function () {
   const obj = this.toObject();
+  delete obj.password;
   delete obj.passwordHash;
-  delete obj.phone; // Never expose driver/student personal phone number
+  delete obj.phone;
   return obj;
 };
 

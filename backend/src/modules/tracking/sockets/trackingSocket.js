@@ -50,7 +50,7 @@ class TrackingSocketManager {
 
         // Student Privacy Guard:
         // A student can ONLY listen to their assigned bus
-        if (user.role === 'student') {
+        if ((user.role || '').toLowerCase() === 'student') {
           if (!user.assignedBusId || user.assignedBusId.toString() !== busId.toString()) {
             return socket.emit('error:unauthorized', {
               message: 'Forbidden: You can only track your assigned bus',

@@ -17,18 +17,20 @@ function createTripController(socketManager) {
           return res.status(404).json({ success: false, message: 'Bus not found' });
         }
 
+        const userId = (req.user?.id || req.user?.userId || req.user?._id)?.toString();
+        const assignedDriverId = (bus.driverId || bus.assignedDriverId)?.toString();
         const isAssigned =
           (req.user?.assignedBusId && req.user.assignedBusId.toString() === bus._id.toString()) ||
-          (bus.assignedDriverId && bus.assignedDriverId.toString() === req.user?.id);
+          (assignedDriverId && assignedDriverId === userId);
 
-        if (req.user?.role === 'driver' && !isAssigned) {
+        if ((req.user?.role || '').toLowerCase() === 'driver' && !isAssigned) {
           return res.status(403).json({ success: false, message: 'You are not assigned to this bus' });
         }
 
         const { trip, isNew } = await tripService.startTrip({
           busId,
           routeId: routeId || bus.routeId,
-          driverId: req.user?.id,
+          driverId: userId,
           direction,
         });
 

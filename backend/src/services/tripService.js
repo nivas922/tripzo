@@ -9,7 +9,7 @@ class TripService {
   async getActiveTripForBus(busId) {
     const trip = await Trip.findOne({
       busId,
-      status: 'in_progress',
+      status: { $in: ['in_progress', 'RUNNING'] },
     }).sort({ startedAt: -1 });
 
     if (!trip) {
@@ -58,7 +58,7 @@ class TripService {
     const trip = await Trip.create({
       busId,
       routeId: targetRouteId,
-      driverId: driverId || bus.assignedDriverId,
+      driverId: driverId || bus.driverId || bus.assignedDriverId,
       direction,
       status: 'in_progress',
       startedAt: new Date(),
@@ -73,7 +73,7 @@ class TripService {
   async endTrip(busId, reason = 'driver_manual_end') {
     const trip = await Trip.findOne({
       busId,
-      status: 'in_progress',
+      status: { $in: ['in_progress', 'RUNNING'] },
     }).sort({ startedAt: -1 });
 
     if (!trip) {

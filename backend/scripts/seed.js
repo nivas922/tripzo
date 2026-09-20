@@ -80,6 +80,7 @@ async function seed() {
 
   console.log('[Seed] Creating Bus 1 (KA-01-EA-2024) & Bus 2 (KA-01-ZZ-9999)...');
   const bus1 = await Bus.create({
+    busNumber: 'Bus 1',
     registrationNumber: 'KA-01-EA-2024',
     routeId: route._id,
     deviceToken: 'IOT-DEV-BUS-01',
@@ -88,6 +89,7 @@ async function seed() {
   });
 
   const bus2 = await Bus.create({
+    busNumber: 'Bus 2',
     registrationNumber: 'KA-01-ZZ-9999',
     routeId: route._id,
     deviceToken: 'IOT-DEV-BUS-02',

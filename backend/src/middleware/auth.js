@@ -1,43 +1,47 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
-const User = require('../models/User');
 const Bus = require('../models/Bus');
 
-function authenticateJWT(req, res, next) {
+function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, message: 'Authentication required: missing Bearer token' });
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required: missing or invalid Bearer token',
+    });
   }
 
   const token = authHeader.split(' ')[1];
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret);
+    decoded.role = (decoded.role || 'STUDENT').toUpperCase();
+    if (!decoded.id && decoded.userId) decoded.id = decoded.userId;
+    if (!decoded._id && decoded.id) decoded._id = decoded.id;
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired authentication token',
+    });
   }
 }
 
-function authorizeRoles(...allowedRoles) {
+function authorize(...allowedRoles) {
+  const normalizedAllowed = allowedRoles.map((r) => r.toUpperCase());
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const userRole = (req.user?.role || '').toUpperCase();
+    if (!req.user || !normalizedAllowed.includes(userRole)) {
       return res.status(403).json({
         success: false,
-        message: `Forbidden: Access restricted to [${allowedRoles.join(', ')}]`,
+        message: `Forbidden: Access requires one of [${normalizedAllowed.join(', ')}]`,
       });
     }
     next();
   };
 }
 
-/**
- * Source-agnostic authentication middleware for the location ingest endpoint:
- * Accepts:
- *  1. Driver/Admin JWT in `Authorization: Bearer <token>`
- *  2. Hardware tracker token in `x-device-token` header or `deviceToken` in body
- */
 async function authenticateDeviceOrDriver(req, res, next) {
   const authHeader = req.headers.authorization;
   const deviceToken = req.headers['x-device-token'] || req.body?.deviceToken;
@@ -47,6 +51,9 @@ async function authenticateDeviceOrDriver(req, res, next) {
     const token = authHeader.split(' ')[1];
     try {
       const decoded = jwt.verify(token, config.jwtSecret);
+      decoded.role = (decoded.role || 'STUDENT').toUpperCase();
+      if (!decoded.id && decoded.userId) decoded.id = decoded.userId;
+      if (!decoded._id && decoded.id) decoded._id = decoded.id;
       req.user = decoded;
 
       // Find driver's assigned bus or body busId
@@ -61,7 +68,8 @@ async function authenticateDeviceOrDriver(req, res, next) {
       }
 
       // Security check: if user is driver, they can only send pings for their assigned bus
-      if (req.user.role === 'driver' && bus.assignedDriverId && bus.assignedDriverId.toString() !== req.user.id) {
+      const driverIdStr = (bus.driverId || bus.assignedDriverId)?.toString();
+      if (req.user.role === 'DRIVER' && driverIdStr && driverIdStr !== req.user.id.toString()) {
         return res.status(403).json({ success: false, message: 'Driver not assigned to this bus' });
       }
 
@@ -96,7 +104,9 @@ async function authenticateDeviceOrDriver(req, res, next) {
 }
 
 module.exports = {
-  authenticateJWT,
-  authorizeRoles,
+  authenticate,
+  authorize,
+  authenticateJWT: authenticate,
+  authorizeRoles: authorize,
   authenticateDeviceOrDriver,
 };

@@ -18,8 +18,10 @@ function createAuthMiddleware(authProvider = defaultAuthProvider) {
     },
 
     requireRoles: (...allowedRoles) => {
+      const lowerAllowed = allowedRoles.map((r) => r.toLowerCase());
       return (req, res, next) => {
-        if (!req.user || !allowedRoles.includes(req.user.role)) {
+        const userRole = (req.user?.role || '').toLowerCase();
+        if (!req.user || !lowerAllowed.includes(userRole)) {
           return res.status(403).json({
             success: false,
             message: `Forbidden: Access requires one of roles [${allowedRoles.join(', ')}]`,

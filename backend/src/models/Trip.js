@@ -12,27 +12,39 @@ const tripSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Route',
       required: true,
+      index: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       default: null,
+      index: true,
     },
     date: {
       type: String,
       default: () => new Date().toISOString().split('T')[0],
       index: true,
     },
-    direction: {
-      type: String,
-      enum: ['morning', 'evening'],
-      default: 'morning',
-    },
     status: {
       type: String,
-      enum: ['scheduled', 'in_progress', 'completed', 'cancelled'],
-      default: 'scheduled',
+      enum: [
+        'NOT_STARTED',
+        'RUNNING',
+        'PAUSED',
+        'COMPLETED',
+        'OFF_ROUTE',
+        'scheduled',
+        'in_progress',
+        'completed',
+        'cancelled',
+      ],
+      default: 'NOT_STARTED',
       index: true,
+    },
+    direction: {
+      type: String,
+      enum: ['MORNING', 'EVENING', 'morning', 'evening'],
+      default: 'MORNING',
     },
     startedAt: {
       type: Date,
@@ -41,6 +53,13 @@ const tripSchema = new mongoose.Schema(
     endedAt: {
       type: Date,
       default: null,
+    },
+    lastLocation: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      speed: { type: Number, default: 0 },
+      heading: { type: Number, default: 0 },
+      timestamp: { type: Date },
     },
     autoEndedReason: {
       type: String,

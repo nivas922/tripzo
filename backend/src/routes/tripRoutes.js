@@ -25,14 +25,17 @@ router.post('/start', authenticateJWT, authorizeRoles('driver', 'admin'), async 
     }
 
     // Driver can only start a trip for their assigned bus (unless admin)
-    if (req.user.role === 'driver' && bus.assignedDriverId && bus.assignedDriverId.toString() !== req.user.id) {
+    const userId = (req.user.id || req.user.userId || req.user._id)?.toString();
+    const assignedDriverId = (bus.driverId || bus.assignedDriverId)?.toString();
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole === 'DRIVER' && assignedDriverId && assignedDriverId !== userId) {
       return res.status(403).json({ success: false, message: 'You are not assigned to this bus' });
     }
 
     const { trip, isNew } = await tripService.startTrip({
       busId,
       routeId: routeId || bus.routeId,
-      driverId: req.user.id,
+      driverId: userId,
       direction,
     });
 
