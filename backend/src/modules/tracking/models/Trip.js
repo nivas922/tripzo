@@ -14,8 +14,7 @@ const tripSchema = new mongoose.Schema(
       required: true,
     },
     driverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String, // String to support both Mongo IDs and external host driver IDs
       default: null,
     },
     date: {

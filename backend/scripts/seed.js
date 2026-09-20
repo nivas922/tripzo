@@ -2,10 +2,12 @@ const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { connectDB, disconnectDB } = require('../src/config/db');
 const User = require('../src/models/User');
-const Route = require('../src/models/Route');
-const Bus = require('../src/models/Bus');
-const Trip = require('../src/models/Trip');
-const LocationPing = require('../src/models/LocationPing');
+const Route = require('../src/modules/tracking/models/Route');
+const Bus = require('../src/modules/tracking/models/Bus');
+const Trip = require('../src/modules/tracking/models/Trip');
+const LocationPing = require('../src/modules/tracking/models/LocationPing');
+const StudentProfile = require('../src/modules/tracking/models/StudentProfile');
+const DriverProfile = require('../src/modules/tracking/models/DriverProfile');
 
 async function seed() {
   console.log('[Seed] Connecting to database...');
@@ -18,6 +20,8 @@ async function seed() {
     Bus.deleteMany({}),
     Trip.deleteMany({}),
     LocationPing.deleteMany({}),
+    StudentProfile.deleteMany({}),
+    DriverProfile.deleteMany({}),
   ]);
 
   console.log('[Seed] Hashing passwords...');
@@ -91,13 +95,21 @@ async function seed() {
     isActive: true,
   });
 
-  console.log('[Seed] Creating Users...');
+  console.log('[Seed] Creating Standalone Users for standalone testing...');
   const driver = await User.create({
     name: 'Ramesh Kumar (Driver)',
     email: 'driver@tripzo.edu',
     phone: '+91 98765 43210',
     passwordHash: driverHash,
     role: 'driver',
+    assignedBusId: bus1._id,
+  });
+
+  console.log('[Seed] Creating Tracking Profiles (Merge-Ready Decoupled Models)...');
+  const driverProfile = await DriverProfile.create({
+    _id: driver._id,
+    externalDriverId: 'TRIPZO-DRV-501',
+    name: 'Ramesh Kumar (Driver)',
     assignedBusId: bus1._id,
   });
 
@@ -120,7 +132,7 @@ async function seed() {
     passwordHash: studentHash,
     role: 'student',
     assignedBusId: bus1._id,
-    homeStopId: route.stops[1]._id, // Silk Board Junction
+    homeStopId: route.stops[1]._id,
   });
 
   const student2 = await User.create({
@@ -130,7 +142,7 @@ async function seed() {
     passwordHash: studentHash,
     role: 'student',
     assignedBusId: bus1._id,
-    homeStopId: route.stops[3]._id, // Bellandur EcoSpace
+    homeStopId: route.stops[3]._id,
   });
 
   const studentOther = await User.create({
@@ -139,27 +151,65 @@ async function seed() {
     phone: '+91 93333 44444',
     passwordHash: studentHash,
     role: 'student',
-    assignedBusId: bus2._id, // Assigned to Bus 2
+    assignedBusId: bus2._id,
+    homeStopId: route.stops[0]._id,
+  });
+
+  const studentProfile1 = await StudentProfile.create({
+    externalStudentId: 'TRIPZO-STU-1001',
+    name: 'Aarav Sharma',
+    assignedBusId: bus1._id,
+    homeStopId: route.stops[1]._id,
+  });
+
+  const studentProfile2 = await StudentProfile.create({
+    externalStudentId: 'TRIPZO-STU-1002',
+    name: 'Priya Patel',
+    assignedBusId: bus1._id,
+    homeStopId: route.stops[3]._id,
+  });
+
+  const studentProfileOther = await StudentProfile.create({
+    externalStudentId: 'TRIPZO-STU-9999',
+    name: 'Kavya Nair (Different Bus)',
+    assignedBusId: bus2._id,
     homeStopId: route.stops[0]._id,
   });
 
   console.log('\n======================================================');
-  console.log(' Tripzo Test Environment Seeded Successfully!');
+  console.log(' TripZo Live Test Environment Seeded Successfully!');
   console.log('======================================================');
-  console.log(' Accounts Created:');
+  console.log(' Standalone Accounts Created:');
   console.log(`   - Driver:    driver@tripzo.edu    | DriverPass123! (Bus: KA-01-EA-2024)`);
   console.log(`   - Admin:     admin@tripzo.edu     | AdminPass123!`);
   console.log(`   - Student 1: student1@tripzo.edu  | StudentPass123! (Stop: Silk Board)`);
   console.log(`   - Student 2: student2@tripzo.edu  | StudentPass123! (Stop: Bellandur)`);
   console.log(`   - Student 3: otherstudent@tripzo.edu | StudentPass123! (Bus: KA-01-ZZ-9999)`);
-  console.log(' Hardware IoT Tracker Device Token:');
+  console.log(' Decoupled Tracking Profiles (Host Mappable):');
+  console.log(`   - Driver Profile:  ${driverProfile.externalDriverId} -> Bus ${bus1.registrationNumber}`);
+  console.log(`   - Student 1 Prof:  ${studentProfile1.externalStudentId} -> Stop Silk Board`);
+  console.log(`   - Student 2 Prof:  ${studentProfile2.externalStudentId} -> Stop Bellandur`);
+  console.log(' Hardware IoT Tracker Device Tokens:');
   console.log(`   - Bus 1 Token: IOT-DEV-BUS-01`);
   console.log(`   - Bus 2 Token: IOT-DEV-BUS-02`);
   console.log(' Route:');
   console.log(`   - "${route.name}" with 5 stops`);
   console.log('======================================================\n');
 
-  return { admin, driver, student1, student2, studentOther, bus1, bus2, route };
+  return {
+    admin,
+    driver,
+    student1,
+    student2,
+    studentOther,
+    bus1,
+    bus2,
+    route,
+    driverProfile,
+    studentProfile1,
+    studentProfile2,
+    studentProfileOther,
+  };
 }
 
 if (require.main === module) {

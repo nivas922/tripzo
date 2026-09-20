@@ -28,7 +28,7 @@ const busSchema = new mongoose.Schema(
     },
     assignedDriverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'DriverProfile',
       default: null,
     },
     deviceToken: {
@@ -36,6 +36,7 @@ const busSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       trim: true,
+      index: true,
       // Used for source-agnostic hardware GPS trackers (AIS-140 / 4G tracker)
     },
     capacity: {
@@ -56,6 +57,7 @@ const busSchema = new mongoose.Schema(
   }
 );
 
+// Prevent re-compiling if already compiled by mongoose
 const Bus = mongoose.models.Bus || mongoose.model('Bus', busSchema);
 
 module.exports = Bus;

@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: TripZo Live - Bus Telemetry & Fleet Tracking API
+  version: 1.0.0
+  description: |
+    TripZo Live is an autonomous, merge-ready live GPS tracking system for college buses.
+    Designed to integrate into host transit platforms (such as TripZo attendance) via pluggable
+    authentication (`AuthProvider`) and decoupled student profiles (`externalStudentId`).
+
+    ### Architecture Highlights
+    - **Self-Contained Module**: All tracking routes are isolated under `/api/v1/tracking`.
+    - **Source-Agnostic Ingestion**: Supports smartphone broadcast via JWT or hardware IoT trackers via `x-device-token`.
+    - **Student Isolation**: Strict security boundary preventing students from accessing unassigned buses.
+    - **Driver Privacy**: Driver telephone numbers and off-trip locations are never exposed.
+
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Standalone Auth
+      summary: Login with credentials (Standalone Mode)
+      description: Returns a JWT for driver, student, or admin in standalone mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  example: driver@tripzo.edu
+                password:
+                  type: string
+                  example: DriverPass123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1Ni...
+                  user:
+                    $ref: '#/components/schemas/UserSafe'
+        '401':
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      tags:
+        - Standalone Auth
+      summary: Get current user profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/UserSafe'
+
+  /tracking/location/ping:
+    post:
+      tags:
+        - Telemetry Ingest
+      summary: Ingest single location ping (Source-Agnostic)
+      description: |
+        Accepts GPS telemetry from either a driver's smartphone (using `BearerAuth`)
+        or an AIS-140 / 4G hardware GPS tracker (using `x-device-token`).
+        Location tracking is only accepted during an active trip.
+      security:
+        - BearerAuth: []
+        - DeviceTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - lat
+                - lng
+              properties:
+                busId:
+                  type: string
+                  description: Optional when authenticated via device token or driver assigned bus
+                  example: 66ab4e7971dbe8b2da8a8789
+                lat:
+                  type: number
+                  format: float
+                  example: 12.8452
+                lng:
+                  type: number
+                  format: float
+                  example: 77.6602
+                speed:
+                  type: number
+                  description: Speed in km/h
+                  example: 35.5
+                heading:
+                  type: number
+                  description: Compass heading in degrees (0-360)
+                  example: 85
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-09-20T08:30:00.000Z"
+      responses:
+        '201':
+          description: Ping received and broadcasted to WebSocket subscribers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  authSource:
+                    type: string
+                    example: driver_phone
+                  ping:
+                    $ref: '#/components/schemas/LocationPing'
+        '400':
+          description: Missing coordinates or no active trip in progress
+        '401':
+          description: Unauthorized device or driver credentials
+
+  /tracking/location/batch:
+    post:
+      tags:
+        - Telemetry Ingest
+      summary: Ingest buffered location pings (Offline Reconnect Flush)
+      description: Flushes buffered telemetry collected locally while the vehicle traversed dead zones.
+      security:
+        - BearerAuth: []
+        - DeviceTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pings
+              properties:
+                busId:
+                  type: string
+                pings:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - lat
+                      - lng
+                    properties:
+                      lat:
+                        type: number
+                      lng:
+                        type: number
+                      speed:
+                        type: number
+                      heading:
+                        type: number
+                      timestamp:
+                        type: string
+                        format: date-time
+      responses:
+        '201':
+          description: Batch successfully ingested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 12
+
+  /tracking/trips/start:
+    post:
+      tags:
+        - Trip Lifecycle
+      summary: Start a bus trip (Driver / Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                busId:
+                  type: string
+                direction:
+                  type: string
+                  enum: [morning, evening]
+                  default: morning
+      responses:
+        '201':
+          description: Trip started
+        '200':
+          description: Trip already in progress
+
+  /tracking/trips/end:
+    post:
+      tags:
+        - Trip Lifecycle
+      summary: End an active bus trip (Driver / Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                busId:
+                  type: string
+                reason:
+                  type: string
+                  example: driver_manual_end
+      responses:
+        '200':
+          description: Trip ended
+
+  /tracking/trips/active:
+    get:
+      tags:
+        - Trip Lifecycle
+      summary: Retrieve current active trip
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: busId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active trip details
+
+  /tracking/buses/{id}/live:
+    get:
+      tags:
+        - Bus Fleet
+      summary: Get live bus position, route, and sanitized driver name
+      description: |
+        Returns the bus's last known location, current trip status, and route geometry.
+        Enforces strict student isolation: students can only query their assigned bus.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Live bus status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  bus:
+                    $ref: '#/components/schemas/BusLive'
+        '403':
+          description: Forbidden (Student not assigned to this bus)
+
+  /tracking/students/me/eta:
+    get:
+      tags:
+        - Student ETA
+      summary: Get live ETA and status to the student's designated stop
+      description: |
+        Returns discrete stop states: `Not started`, `Approaching`, `Arrived`, or `Departed your stop`.
+        Uses route-snapping, OSRM public API, 30s cache, and Haversine fallback.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Stop ETA details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  busRegistration:
+                    type: string
+                    example: KA-01-EA-2024
+                  tripStatus:
+                    type: string
+                    example: in_progress
+                  eta:
+                    $ref: '#/components/schemas/StudentEta'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Driver, student, or admin JWT token
+    DeviceTokenAuth:
+      type: apiKey
+      in: header
+      name: x-device-token
+      description: Unique hardware IoT tracker token provisioned per vehicle
+
+  schemas:
+    UserSafe:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [student, driver, admin]
+        assignedBusId:
+          type: string
+        homeStopId:
+          type: string
+
+    LocationPing:
+      type: object
+      properties:
+        id:
+          type: string
+        busId:
+          type: string
+        tripId:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        speed:
+          type: number
+        heading:
+          type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    BusLive:
+      type: object
+      properties:
+        id:
+          type: string
+        registrationNumber:
+          type: string
+        route:
+          type: object
+        driver:
+          type: object
+          properties:
+            name:
+              type: string
+        activeTrip:
+          type: object
+        lastLocation:
+          type: object
+
+    StudentEta:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [Not started, Approaching, Arrived, Departed your stop, Unknown]
+          example: Approaching
+        message:
+          type: string
+          example: Bus is approaching Silk Board Junction
+        etaMinutes:
+          type: integer
+          example: 12
+        distanceKm:
+          type: number
+          example: 4.8
+        stopName:
+          type: string
+          example: Silk Board Junction
+        lastUpdated:
+          type: string
+          format: date-time
+
+x-websocket-events:
+  connection:
+    handshake:
+      auth:
+        token: "<jwt>"
+  client_emits:
+    subscribe:bus:
+      payload:
+        busId: "<busId>"
+      notes: Student can only subscribe to their assigned bus. Mismatch returns error:unauthorized.
+    unsubscribe:bus:
+      payload:
+        busId: "<busId>"
+  server_emits:
+    bus:initial_state:
+      payload: "{ busId, isActiveTrip, trip, lastLocation }"
+    bus:location_update:
+      payload: "{ busId, tripId, lat, lng, speed, heading, timestamp }"
+    bus:trip_started:
+      payload: "{ busId, tripId, direction, startedAt }"
+    bus:trip_ended:
+      payload: "{ busId, tripId, endedAt, reason }"
+    error:unauthorized:
+      payload: "{ message: 'Forbidden' }"

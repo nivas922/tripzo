@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const config = require('../config');
+const config = require('../../../config');
 
 const locationPingSchema = new mongoose.Schema(
   {
@@ -42,11 +42,10 @@ const locationPingSchema = new mongoose.Schema(
   }
 );
 
-// Compound index for querying recent pings for a bus
 locationPingSchema.index({ busId: 1, timestamp: -1 });
 
-// TTL Index: Automatically purge location pings after 7 days (604,800 seconds)
-const ttlSeconds = config.locationPingTtlDays * 24 * 60 * 60;
+// TTL Index: Auto-delete after 7 days
+const ttlSeconds = (config.locationPingTtlDays || 7) * 24 * 60 * 60;
 locationPingSchema.index({ timestamp: 1 }, { expireAfterSeconds: ttlSeconds });
 
 const LocationPing = mongoose.models.LocationPing || mongoose.model('LocationPing', locationPingSchema);

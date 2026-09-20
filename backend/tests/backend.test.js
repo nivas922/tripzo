@@ -20,6 +20,13 @@ let testPort;
 let seedData;
 let tokens = {};
 
+function withTimeout(promise, ms = 4000, msg = 'Socket event timed out') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms)),
+  ]);
+}
+
 describe('Tripzo Phase 1 Live Bus GPS Tracking Backend Tests', () => {
   before(async () => {
     // 1. Connect to Database & Seed
@@ -263,23 +270,23 @@ describe('Tripzo Phase 1 Live Bus GPS Tracking Backend Tests', () => {
       transports: ['websocket'],
     });
 
-    await new Promise((resolve) => studentSocket.on('connect', resolve));
+    await withTimeout(new Promise((resolve) => studentSocket.on('connect', resolve)));
     assert.ok(studentSocket.connected, 'Socket connected successfully');
 
     // 10a. Verify student cannot subscribe to unassigned bus
     let unauthorizedTriggered = false;
-    await new Promise((resolve) => {
+    await withTimeout(new Promise((resolve) => {
       studentSocket.emit('subscribe:bus', { busId: seedData.bus2._id.toString() });
       studentSocket.on('error:unauthorized', (err) => {
         unauthorizedTriggered = true;
         resolve();
       });
-    });
+    }));
     assert.strictEqual(unauthorizedTriggered, true, 'Student was correctly prevented from subscribing to unassigned bus');
 
     // 10b. Subscribe to assigned bus and receive initial state
     let receivedInitial = false;
-    await new Promise((resolve) => {
+    await withTimeout(new Promise((resolve) => {
       studentSocket.emit('subscribe:bus', { busId: seedData.bus1._id.toString() });
       studentSocket.on('bus:initial_state', (data) => {
         assert.strictEqual(data.busId, seedData.bus1._id.toString());
@@ -287,18 +294,18 @@ describe('Tripzo Phase 1 Live Bus GPS Tracking Backend Tests', () => {
         receivedInitial = true;
         resolve();
       });
-    });
+    }));
     assert.strictEqual(receivedInitial, true);
 
     // 10c. Send a location ping and verify real-time WebSocket broadcast received
-    const pingPromise = new Promise((resolve) => {
+    const pingPromise = withTimeout(new Promise((resolve) => {
       studentSocket.on('bus:location_update', (data) => {
         assert.strictEqual(data.busId, seedData.bus1._id.toString());
         assert.strictEqual(data.lat, 12.93);
         assert.strictEqual(data.lng, 77.68);
         resolve();
       });
-    });
+    }));
 
     await request(app)
       .post('/api/location/ping')
