@@ -425,7 +425,9 @@ export const StudentDashboard = () => {
             <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
               {routeData?.stops && routeData.stops.length > 0 ? (
                 routeData.stops.map((stop, idx) => {
-                  const isHome = userStop && (stop._id === userStop._id || stop.id === userStop.id);
+                  const targetUserStopId = userStop?._id || userStop?.id || studentProfile?.assignedStop?._id || studentProfile?.assignedStop;
+                  const currentStopId = stop._id || stop.id;
+                  const isHome = Boolean(targetUserStopId && currentStopId && String(currentStopId) === String(targetUserStopId));
                   return (
                     <div
                       key={stop._id || stop.id || idx}

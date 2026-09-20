@@ -14,12 +14,17 @@ import {
   Radio, 
   RotateCcw,
   CheckCircle,
-  Clock
+  Clock,
+  Route as RouteIcon,
+  MapPin
 } from 'lucide-react';
 
 export const DriverConsole = () => {
   const [trip, setTrip] = useState(null);
   const [bus, setBus] = useState(null);
+  const [availableRoutes, setAvailableRoutes] = useState([]);
+  const [selectedRouteId, setSelectedRouteId] = useState('');
+  const [selectedRoute, setSelectedRoute] = useState(null);
   const [direction, setDirection] = useState('MORNING');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -35,38 +40,81 @@ export const DriverConsole = () => {
 
   const watchIdRef = useRef(null);
   const simIntervalRef = useRef(null);
-  const routeStops = trip?.route?.stops || bus?.route?.stops || [];
 
-  // Fetch current active trip for driver's assigned bus
-  const loadActiveTrip = useCallback(async () => {
+  // Effective route stops: active trip's route, or selected route, or bus's default route
+  const activeRoute = trip?.route || selectedRoute || bus?.route;
+  const routeStops = activeRoute?.stops || [];
+
+  // Fetch routes and active trip for driver
+  const loadInitialData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setError(null);
-      const res = await driverApi.getCurrentTrip();
-      const current = res.data?.data?.trip || res.data?.trip || null;
-      setTrip(current);
-
-      if (current?.bus) {
-        setBus(current.bus);
-        if (current.bus.currentLocation) {
-          setCurrentCoords({
-            latitude: current.bus.currentLocation.latitude,
-            longitude: current.bus.currentLocation.longitude,
-          });
-          setSpeed(current.bus.currentLocation.speed || 0);
-          setHeading(current.bus.currentLocation.heading || 0);
+      // 1. Fetch available routes
+      try {
+        const routesRes = await driverApi.getAvailableRoutes();
+        const routes = routesRes.data?.data?.routes || routesRes.data?.routes || routesRes.data || [];
+        setAvailableRoutes(routes);
+        if (routes.length > 0) {
+          setSelectedRouteId(routes[0]._id || routes[0].id);
+          setSelectedRoute(routes[0]);
         }
+      } catch (rErr) {
+        console.warn('[Driver] Could not fetch routes list:', rErr.message);
       }
-    } catch (err) {
-      console.warn('[Driver] Failed to fetch current trip:', err);
-      // Not an error if driver has no active trip yet
+
+      // 2. Fetch current trip if one is running
+      try {
+        const res = await driverApi.getCurrentTrip();
+        const current = res.data?.data?.trip || res.data?.trip || null;
+        setTrip(current);
+
+        if (current?.bus) {
+          setBus(current.bus);
+          if (current.route) {
+            setSelectedRoute(current.route);
+            setSelectedRouteId(current.route._id || current.route.id);
+          }
+          if (current.bus.currentLocation) {
+            setCurrentCoords({
+              latitude: current.bus.currentLocation.latitude,
+              longitude: current.bus.currentLocation.longitude,
+            });
+            setSpeed(current.bus.currentLocation.speed || 0);
+            setHeading(current.bus.currentLocation.heading || 0);
+          }
+        }
+      } catch (tErr) {
+        // Normal if driver has no active trip yet
+      }
+
+      // 3. Fallback: if no trip but bus list is accessible
+      try {
+        const busesRes = await driverApi.getBuses();
+        const buses = busesRes.data?.data?.buses || busesRes.data?.buses || busesRes.data || [];
+        if (buses.length > 0 && !bus) {
+          setBus(buses[0]);
+        }
+      } catch (bErr) {
+        // Fallback
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadActiveTrip();
-  }, [loadActiveTrip]);
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Handle Route change
+  const handleRouteChange = (routeId) => {
+    setSelectedRouteId(routeId);
+    const found = availableRoutes.find((r) => (r._id || r.id) === routeId);
+    if (found) {
+      setSelectedRoute(found);
+    }
+  };
 
   // Send GPS location update to backend API and Socket
   const transmitLocation = useCallback(async (lat, lng, spd = 25, hdg = 90) => {
@@ -93,7 +141,7 @@ export const DriverConsole = () => {
         socket.emit('driver:location_update', payload);
       }
     } catch (err) {
-      console.warn('[Driver] Location sync error:', err.response?.data?.message || err.message);
+      console.warn('[Driver] Location sync warning:', err.response?.data?.message || err.message);
     }
   }, [bus, trip]);
 
@@ -139,22 +187,21 @@ export const DriverConsole = () => {
   // Handle GPS Simulation along route coordinates (for testing/development)
   useEffect(() => {
     if (isSimulating && trip && (trip.status === 'RUNNING' || trip.status === 'in_progress')) {
-      // Collect route stop coordinates or default Bangalore campus path
       const coordsList = routeStops.length > 0
         ? routeStops.map((s) => [s.location.coordinates[1], s.location.coordinates[0]])
         : [
-            [12.9250, 77.6850],
-            [12.9220, 77.6880],
-            [12.9180, 77.6920],
-            [12.9140, 77.6960],
+            [12.8452, 77.6602],
+            [12.9172, 77.6228],
+            [12.9116, 77.6389],
+            [12.9260, 77.6762],
+            [12.9350, 77.6950],
           ];
 
       let step = 0;
       simIntervalRef.current = setInterval(() => {
         const [targetLat, targetLng] = coordsList[step % coordsList.length];
-        // Add small jitter
-        const jitterLat = targetLat + (Math.random() - 0.5) * 0.0005;
-        const jitterLng = targetLng + (Math.random() - 0.5) * 0.0005;
+        const jitterLat = targetLat + (Math.random() - 0.5) * 0.0003;
+        const jitterLng = targetLng + (Math.random() - 0.5) * 0.0003;
 
         setCurrentCoords({ latitude: jitterLat, longitude: jitterLng });
         setSpeed(32 + Math.floor(Math.random() * 8));
@@ -181,10 +228,11 @@ export const DriverConsole = () => {
     setError(null);
     try {
       const busId = bus?._id || bus?.id;
-      const res = await driverApi.startTrip(busId, direction);
+      const res = await driverApi.startTrip(busId, direction, selectedRouteId);
       const newTrip = res.data?.data?.trip || res.data?.trip || res.data;
       setTrip(newTrip);
       if (newTrip?.bus) setBus(newTrip.bus);
+      if (newTrip?.route) setSelectedRoute(newTrip.route);
     } catch (err) {
       console.error('Failed to start trip:', err);
       setError(err.response?.data?.message || 'Failed to start trip.');
@@ -231,7 +279,7 @@ export const DriverConsole = () => {
       await driverApi.endTrip(tripId);
       setIsSimulating(false);
       setTrip(null);
-      await loadActiveTrip();
+      await loadInitialData();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to end trip.');
     } finally {
@@ -275,15 +323,17 @@ export const DriverConsole = () => {
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-amber-100 text-amber-700">
+            <span className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
               <Compass className="w-6 h-6" />
             </span>
             <div>
               <h1 className="text-2xl font-black text-slate-900">
                 Driver Telemetry Console
               </h1>
-              <p className="text-xs text-slate-500">
-                Assigned Bus: <strong className="text-slate-800">{bus?.busNumber || bus?.registrationNumber || 'KA-01-EA-2024'}</strong>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Bus: <strong className="text-slate-800">{bus?.busNumber || bus?.registrationNumber || 'KA-01-EA-2024'}</strong>
+                {' • '}
+                Route: <strong className="text-blue-600">{activeRoute?.name || 'South Campus to City'}</strong>
               </p>
             </div>
           </div>
@@ -312,14 +362,39 @@ export const DriverConsole = () => {
 
             {!trip || trip.status === 'COMPLETED' ? (
               <div className="space-y-3">
+                {/* Choose Route Dropdown */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Select Route Direction:
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <RouteIcon className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Choose Route Location:</span>
+                  </label>
+                  <select
+                    value={selectedRouteId}
+                    onChange={(e) => handleRouteChange(e.target.value)}
+                    className="w-full py-2.5 px-3 border border-slate-300 rounded-xl text-xs font-medium bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    {availableRoutes.length > 0 ? (
+                      availableRoutes.map((r) => (
+                        <option key={r._id || r.id} value={r._id || r.id}>
+                          {r.name || `Route ${r.routeNumber}`} ({r.stops?.length || 0} stops)
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Route 12 - South Campus to City</option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Choose Direction Dropdown */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
+                    <Compass className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Select Direction:</span>
                   </label>
                   <select
                     value={direction}
                     onChange={(e) => setDirection(e.target.value)}
-                    className="w-full py-2 px-3 border border-slate-300 rounded-lg text-sm bg-white text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full py-2.5 px-3 border border-slate-300 rounded-xl text-xs font-medium bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="MORNING">Morning (City &rarr; Campus)</option>
                     <option value="EVENING">Evening (Campus &rarr; City)</option>
@@ -337,6 +412,11 @@ export const DriverConsole = () => {
               </div>
             ) : (
               <div className="space-y-3">
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-900">
+                  <p className="font-bold">Active Trip on: {activeRoute?.name}</p>
+                  <p className="text-[11px] text-blue-700 mt-0.5">Direction: {trip.direction || direction}</p>
+                </div>
+
                 <div className="flex gap-2">
                   {isRunning ? (
                     <button
@@ -372,10 +452,10 @@ export const DriverConsole = () => {
                 <div className="pt-3 border-t border-slate-100">
                   <button
                     onClick={() => setIsSimulating(!isSimulating)}
-                    className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold border transition ${
+                    className={`w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold border transition ${
                       isSimulating
-                        ? 'bg-purple-100 border-purple-300 text-purple-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
                     }`}
                   >
                     <Navigation className="w-3.5 h-3.5" />
@@ -425,7 +505,7 @@ export const DriverConsole = () => {
               autoCenter={true}
               busDetails={{
                 busNumber: bus?.busNumber,
-                route: trip?.route || bus?.route,
+                route: activeRoute,
               }}
               height="450px"
             />
@@ -434,7 +514,10 @@ export const DriverConsole = () => {
           {/* Stops List Checklist */}
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
             <h4 className="font-bold text-sm text-slate-800 mb-3 flex items-center justify-between">
-              <span>Route Stops Order</span>
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-blue-600" />
+                <span>Stops on this Route</span>
+              </div>
               <span className="text-xs font-normal text-slate-500">
                 {routeStops.length} Total Stops
               </span>
@@ -442,14 +525,14 @@ export const DriverConsole = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               {routeStops.map((stop, i) => (
-                <div key={stop._id || stop.id || i} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                <div key={stop._id || stop.id || i} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                     {stop.sequenceNumber || i + 1}
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{stop.name}</p>
                     {stop.scheduledTime && (
-                      <p className="text-[10px] text-slate-500">{stop.scheduledTime}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">{stop.scheduledTime}</p>
                     )}
                   </div>
                 </div>

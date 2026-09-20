@@ -88,6 +88,8 @@ export const studentApi = {
 
 export const driverApi = {
   getCurrentTrip: () => api.get('/api/trips/current'),
+  getAvailableRoutes: () => api.get('/api/routes'),
+  getBuses: () => api.get('/api/buses'),
   startTrip: (busId, direction = 'MORNING', routeId) =>
     api.post('/api/trips/start', { busId, direction, routeId }),
   pauseTrip: (tripId) => api.post(`/api/trips/${tripId}/pause`),
