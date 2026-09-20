@@ -73,6 +73,9 @@ describe('TripZo Live - Modular & Merge-Ready Tracking Architecture Tests', () =
   });
 
   after(async () => {
+    if (trackingSocketManager) {
+      trackingSocketManager.close();
+    }
     if (server) {
       await new Promise((resolve) => server.close(resolve));
     }

@@ -128,6 +128,13 @@ class TrackingSocketManager {
       reason: tripData.autoEndedReason,
     });
   }
+
+  close() {
+    if (this.io) {
+      this.io.close();
+      this.io = null;
+    }
+  }
 }
 
 module.exports = TrackingSocketManager;

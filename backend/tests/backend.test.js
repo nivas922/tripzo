@@ -64,6 +64,9 @@ describe('Tripzo Phase 1 Live Bus GPS Tracking Backend Tests', () => {
   });
 
   after(async () => {
+    if (socketManager) {
+      socketManager.close();
+    }
     if (server) {
       await new Promise((resolve) => server.close(resolve));
     }
