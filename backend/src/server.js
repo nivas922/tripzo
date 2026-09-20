@@ -23,6 +23,20 @@ async function start() {
   try {
     await connectDB();
 
+    // Auto-seed initial demo accounts and route fleet if database is freshly created
+    try {
+      const User = require('./models/User');
+      const userCount = await User.countDocuments();
+      if (userCount === 0) {
+        console.log('[Server] Database is empty. Auto-seeding initial fleet and demo accounts...');
+        const seed = require('../scripts/seed');
+        await seed();
+        console.log('[Server] Auto-seed completed successfully!');
+      }
+    } catch (seedErr) {
+      console.warn('[Server] Auto-seed check warning (non-fatal):', seedErr.message);
+    }
+
     server.listen(config.port, () => {
       console.log(`====================================================`);
       console.log(` TripZo Live - Modular Bus Tracking Service Active`);
