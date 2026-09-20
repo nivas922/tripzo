@@ -246,6 +246,58 @@ const tripController = {
   },
 
   /**
+   * @route   GET /api/trips/current
+   * @desc    Get currently active trip for logged-in driver or student
+   */
+  async getCurrentTrip(req, res, next) {
+    try {
+      let busId = req.query.busId || req.user.assignedBusId;
+
+      const userId = req.user.id || req.user.userId || req.user._id;
+      if (!busId && (req.user.role === 'DRIVER')) {
+        const bus = await Bus.findOne({
+          $or: [
+            { driverId: userId },
+            { assignedDriverId: userId },
+          ],
+        });
+        if (bus) busId = bus._id;
+      }
+
+      if (!busId) {
+        return res.status(200).json({
+          success: true,
+          data: { trip: null },
+          trip: null,
+          message: 'No assigned bus or active trip found',
+        });
+      }
+
+      const trip = await tripService.getActiveTripForBus(busId);
+      if (!trip) {
+        return res.status(200).json({
+          success: true,
+          data: { trip: null },
+          trip: null,
+          message: 'No active trip in progress',
+        });
+      }
+
+      const populatedTrip = await tripService.getTripById(trip._id);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          trip: populatedTrip || trip,
+        },
+        trip: populatedTrip || trip,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * @route   GET /api/trips/:id
    * @desc    Get trip by ID
    */

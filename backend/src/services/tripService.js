@@ -14,7 +14,7 @@ class TripService {
 
     const trip = await Trip.findOne({
       busId,
-      status: { $in: ['in_progress', 'RUNNING', 'PAUSED'] },
+      status: { $in: ['in_progress', 'RUNNING', 'PAUSED', 'OFF_ROUTE', 'OFFLINE'] },
     }).sort({ startedAt: -1 });
 
     if (!trip) {
@@ -122,15 +122,16 @@ class TripService {
    */
   async endTrip(busIdOrTripId, reason = 'driver_manual_end') {
     let trip = null;
+    const activeStatuses = ['in_progress', 'RUNNING', 'PAUSED', 'OFF_ROUTE', 'OFFLINE'];
     if (mongoose.Types.ObjectId.isValid(busIdOrTripId)) {
       trip = await Trip.findOne({
         _id: busIdOrTripId,
-        status: { $in: ['in_progress', 'RUNNING', 'PAUSED'] },
+        status: { $in: activeStatuses },
       });
       if (!trip) {
         trip = await Trip.findOne({
           busId: busIdOrTripId,
-          status: { $in: ['in_progress', 'RUNNING', 'PAUSED'] },
+          status: { $in: activeStatuses },
         }).sort({ startedAt: -1 });
       }
     }

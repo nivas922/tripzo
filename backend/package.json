@@ -8,7 +8,7 @@
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test tests/phase1_auth_models.test.js tests/phase2_crud.test.js tests/phase3_trips.test.js tests/tracking_modular.test.js tests/backend.test.js"
+    "test": "node --test tests/phase1_auth_models.test.js tests/phase2_crud.test.js tests/phase3_trips.test.js tests/tracking_modular.test.js tests/backend.test.js tests/frontend_contract_compliance.test.js"
   },
   "keywords": [
     "gps",

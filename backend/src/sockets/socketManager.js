@@ -99,13 +99,28 @@ class SocketManager {
    */
   broadcastLocationUpdate(busId, pingData) {
     if (!this.io) return;
+    const lat = pingData.latitude !== undefined ? pingData.latitude : pingData.lat;
+    const lng = pingData.longitude !== undefined ? pingData.longitude : pingData.lng;
+    const ts = pingData.timestamp instanceof Date ? pingData.timestamp.toISOString() : (pingData.timestamp || new Date().toISOString());
+
+    // Standard bus:location event
+    this.io.to(`bus:${busId}`).emit('bus:location', {
+      busId: busId.toString(),
+      latitude: Number(lat),
+      longitude: Number(lng),
+      speed: Number(pingData.speed || 0),
+      heading: Number(pingData.heading || 0),
+      timestamp: ts,
+    });
+
+    // Backwards compatibility event
     this.io.to(`bus:${busId}`).emit('bus:location_update', {
       busId,
       tripId: pingData.tripId,
-      lat: pingData.lat,
-      lng: pingData.lng,
-      speed: pingData.speed,
-      heading: pingData.heading,
+      lat: Number(lat),
+      lng: Number(lng),
+      speed: Number(pingData.speed || 0),
+      heading: Number(pingData.heading || 0),
       timestamp: pingData.timestamp,
     });
   }

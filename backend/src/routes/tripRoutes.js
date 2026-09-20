@@ -35,6 +35,12 @@ router.post('/:id/resume', authenticate, authorize('DRIVER', 'ADMIN'), tripContr
 router.get('/active', authenticate, tripController.getActiveTrip);
 
 /**
+ * @route   GET /api/trips/current
+ * @desc    Get current active trip for logged in driver or student
+ */
+router.get('/current', authenticate, tripController.getCurrentTrip);
+
+/**
  * @route   GET /api/trips/:id
  * @desc    Get trip details by ID
  */

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
 const DriverProfile = require('../models/DriverProfile');
+const Bus = require('../models/Bus');
 const config = require('../config');
 
 const authController = {

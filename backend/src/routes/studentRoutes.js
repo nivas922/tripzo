@@ -84,6 +84,18 @@ router.get('/me/eta', authenticate, authorize('STUDENT'), async (req, res, next)
 router.get('/me', authenticate, studentAdminController.getMyProfile);
 
 /**
+ * @route   GET /api/students/me/bus
+ * @desc    Get currently logged in student's assigned bus and active trip
+ */
+router.get('/me/bus', authenticate, authorize('STUDENT'), studentAdminController.getMyBus);
+
+/**
+ * @route   GET /api/students/me/route
+ * @desc    Get currently logged in student's assigned route with ordered stops
+ */
+router.get('/me/route', authenticate, authorize('STUDENT'), studentAdminController.getMyRoute);
+
+/**
  * @route   GET /api/students
  * @desc    List all students with profile details (Admin only)
  */

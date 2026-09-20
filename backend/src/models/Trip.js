@@ -33,6 +33,7 @@ const tripSchema = new mongoose.Schema(
         'PAUSED',
         'COMPLETED',
         'OFF_ROUTE',
+        'OFFLINE',
         'scheduled',
         'in_progress',
         'completed',

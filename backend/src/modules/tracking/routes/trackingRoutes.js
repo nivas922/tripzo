@@ -23,6 +23,7 @@ function createTrackingRoutes({ authProvider, socketManager } = {}) {
   const tripController = createTripController(socketManager);
 
   // --- Location Telemetry Endpoints (Source-Agnostic) ---
+  router.post('/location/update', authenticateDeviceOrDriver, locationController.ping);
   router.post('/location/ping', authenticateDeviceOrDriver, locationController.ping);
   router.post('/location/batch', authenticateDeviceOrDriver, locationController.batch);
 
@@ -30,6 +31,7 @@ function createTrackingRoutes({ authProvider, socketManager } = {}) {
   router.post('/trips/start', requireAuth, requireRoles('driver', 'admin'), tripController.startTrip);
   router.post('/trips/end', requireAuth, requireRoles('driver', 'admin'), tripController.endTrip);
   router.get('/trips/active', requireAuth, tripController.getActiveTrip);
+  router.get('/trips/current', requireAuth, tripController.getActiveTrip);
 
   // --- Bus Live Query (Student Isolation & Driver Phone Sanitization) ---
   router.get('/buses/:id/live', requireAuth, busController.getLiveBus);

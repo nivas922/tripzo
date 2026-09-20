@@ -6,10 +6,23 @@ function createLocationController(socketManager) {
     async ping(req, res, next) {
       try {
         const bus = req.bus;
-        const { lat, lng, speed = 0, heading = 0, timestamp } = req.body;
+        const lat = req.body.latitude !== undefined ? req.body.latitude : req.body.lat;
+        const lng = req.body.longitude !== undefined ? req.body.longitude : req.body.lng;
+        const speed = req.body.speed !== undefined ? req.body.speed : 0;
+        const heading = req.body.heading !== undefined ? req.body.heading : 0;
+        const timestamp = req.body.timestamp;
 
         if (lat === undefined || lng === undefined) {
-          return res.status(400).json({ success: false, message: 'lat and lng are required' });
+          return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+        }
+
+        const numLat = Number(lat);
+        const numLng = Number(lng);
+        if (isNaN(numLat) || numLat < -90 || numLat > 90 || isNaN(numLng) || numLng < -180 || numLng > 180) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid GPS coordinates: latitude must be between -90 and 90, longitude between -180 and 180',
+          });
         }
 
         // Privacy safeguard: location is NEVER broadcast outside an active trip

@@ -51,6 +51,30 @@ class EtaService {
       };
     }
 
+    // Check if trip is in OFF_ROUTE status
+    if (activeTrip.status === 'OFF_ROUTE') {
+      return {
+        status: 'OFF_ROUTE',
+        message: 'Bus may be temporarily away from its normal route.',
+        etaMinutes: null,
+        distanceKm: null,
+        stopName: null,
+        lastUpdated: bus.lastLocation?.timestamp || null,
+      };
+    }
+
+    // Check if trip is in OFFLINE status
+    if (activeTrip.status === 'OFFLINE') {
+      return {
+        status: 'OFFLINE',
+        message: 'Bus is temporarily offline. Awaiting GPS connection.',
+        etaMinutes: null,
+        distanceKm: null,
+        stopName: null,
+        lastUpdated: bus.lastLocation?.timestamp || null,
+      };
+    }
+
     const stops = route.stops || [];
     const studentStop = stops.find((s) => s._id.toString() === homeStopId.toString());
 

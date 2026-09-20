@@ -15,8 +15,36 @@ function createApp({ authProvider, socketManager } = {}) {
   const activeAuthProvider = authProvider || new JwtAuthProvider();
   const activeSocketManager = socketManager || defaultSocketManager;
 
-  // Basic middleware
-  app.use(cors());
+  // Basic middleware & CORS configuration
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5000',
+  ];
+  const configuredFrontend = process.env.FRONTEND_URL;
+  if (configuredFrontend) {
+    configuredFrontend.split(',').forEach((url) => {
+      const trimmed = url.trim();
+      if (trimmed && !allowedOrigins.includes(trimmed)) allowedOrigins.push(trimmed);
+    });
+  }
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow non-browser clients (curl, Postman, IoT devices)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return callback(null, true);
+      // Auto-allow all Vercel domains for preview & production builds
+      if (/^https:\/\/[a-zA-Z0-9-_.]+\.vercel\.app$/.test(origin)) return callback(null, true);
+      return callback(null, true); // Permissive fallback for seamless development
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-device-token', 'X-Requested-With', 'Accept'],
+  }));
+  app.options('*', cors());
   app.use(express.json());
 
   // Health check
@@ -49,12 +77,16 @@ function createApp({ authProvider, socketManager } = {}) {
   const studentRoutes = require('./routes/studentRoutes');
   const driverRoutes = require('./routes/driverRoutes');
   const tripRoutes = require('./routes/tripRoutes');
+  const locationRoutes = require('./routes/locationRoutes');
+  const adminRoutes = require('./routes/adminRoutes');
 
   app.use('/api/buses', busRoutes);
   app.use('/api/routes', routeRoutes);
   app.use('/api/students', studentRoutes);
   app.use('/api/drivers', driverRoutes);
   app.use('/api/trips', tripRoutes);
+  app.use('/api/location', locationRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // Self-Contained Tracking Module
   const trackingRoutes = createTrackingRoutes({
